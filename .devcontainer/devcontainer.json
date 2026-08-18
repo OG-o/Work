@@ -1,0 +1,25 @@
+{
+  "name": "Ubuntu 24.04 Cloud PC Workstation",
+  "forwardPorts": [6080, 5901],
+  "portsAttributes": {
+    "6080": {
+      "label": "Ubuntu Web Desktop",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    },
+    "5901": {
+      "label": "TigerVNC RFB Server",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "bash ./setup.sh",
+  "postStartCommand": "cloudpc start",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
