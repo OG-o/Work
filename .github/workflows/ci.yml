@@ -1,0 +1,39 @@
+name: CI & Quality Assurance
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate Shell Script Syntax
+        run: |
+          bash -n setup.sh
+          bash -n bin/cloudpc
+          bash -n scripts/daily-pc-service
+          echo "✔ All shell scripts passed syntax validation."
+
+      - name: Validate Python Modules
+        run: |
+          python3 -m py_compile scripts/audio_streamer.py
+          python3 -m py_compile scripts/autonomous_user_session.py
+          python3 -m py_compile scripts/system_health_check.py
+          echo "✔ All Python modules compiled cleanly."
+
+      - name: Validate JSON Manifests
+        run: |
+          python3 -m json.tool config/manifest.json > /dev/null
+          python3 -m json.tool .devcontainer/devcontainer.json > /dev/null
+          echo "✔ All JSON configuration files are valid."

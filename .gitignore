@@ -1,0 +1,25 @@
+# Logs
+*.log
+logs/
+.vnc/*.log
+/tmp/*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# OS and Editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# System generated artifacts
+.system_generated/
+*.deb
+*.iso
+*.img
