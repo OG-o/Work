@@ -16,7 +16,7 @@
       z-index: 999999;
       display: flex;
       gap: 6px;
-      background: rgba(24, 24, 37, 0.88);
+      background: rgba(24, 24, 37, 0.90);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       padding: 6px 10px;
@@ -34,7 +34,7 @@
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 8px 13px;
+      padding: 8px 12px;
       border-radius: 20px;
       font-size: 13px;
       font-weight: 700;
@@ -52,7 +52,7 @@
       background: #89b4fa;
       color: #11111b;
       border: none;
-      padding: 8px 13px;
+      padding: 8px 12px;
       border-radius: 20px;
       font-size: 13px;
       font-weight: 700;
@@ -65,7 +65,7 @@
 
     // 3. Send Text / Paste Prompt Button
     const pasteBtn = document.createElement('button');
-    pasteBtn.innerHTML = '💬 Type/Paste';
+    pasteBtn.innerHTML = '💬 Paste';
     pasteBtn.style.cssText = `
       background: #313244;
       color: #cdd6f4;
@@ -78,17 +78,17 @@
       touch-action: manipulation;
     `;
 
-    // 4. Fullscreen / Fit Toggle Button
+    // 4. Zoom / Fit Toggle Button
     const fitBtn = document.createElement('button');
-    fitBtn.innerHTML = '🔍 Fit';
+    fitBtn.innerHTML = '🔍 Fit Screen';
     fitBtn.style.cssText = `
-      background: #313244;
-      color: #cdd6f4;
-      border: 1px solid #45475a;
+      background: #a6e3a1;
+      color: #11111b;
+      border: 1px solid #a6e3a1;
       padding: 8px 11px;
       border-radius: 20px;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       touch-action: manipulation;
     `;
@@ -195,13 +195,14 @@
       }
     });
 
-    // Event: Fit screen toggle
+    // Event: Fit screen toggle (Smooth scaling without oversized elements)
     fitBtn.addEventListener('click', function(e) {
       e.stopPropagation();
       if (window.rfb) {
         window.rfb.scaleViewport = !window.rfb.scaleViewport;
         fitBtn.style.background = window.rfb.scaleViewport ? '#a6e3a1' : '#313244';
         fitBtn.style.color = window.rfb.scaleViewport ? '#11111b' : '#cdd6f4';
+        fitBtn.innerHTML = window.rfb.scaleViewport ? '🔍 Fit: ON' : '🔍 Fit: OFF';
       }
     });
 
@@ -212,11 +213,12 @@
     document.body.appendChild(bar);
     document.body.appendChild(hiddenInput);
 
-    // Expose rfb globally when UI initializes
+    // Expose rfb globally when UI initializes and prevent server-side downscaling
     const checkRFB = setInterval(function() {
       if (window.UI && window.UI.rfb) {
         window.rfb = window.UI.rfb;
         window.rfb.scaleViewport = true;
+        window.rfb.resizeSession = false; // Never shrink server resolution to phone CSS pixels
         clearInterval(checkRFB);
       }
     }, 500);
