@@ -86,6 +86,20 @@ sudo chmod +x /usr/local/bin/google-chrome
 sudo ln -sf /usr/local/bin/google-chrome /usr/local/bin/google-chrome-stable
 
 # 3. Install Microsoft Visual Studio Code
+# Install Cursor AI Code Editor
+echo -e "${YELLOW}Setting up Cursor AI Code Editor Desktop App...${NC}"
+if ! command -v cursor &> /dev/null; then
+    curl -fsSL https://downloads.cursor.com/keys/anysphere.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/cursor.gpg > /dev/null || true
+    echo "deb [arch=amd64,arm64 signed-by=/etc/apt/keyrings/cursor.gpg] https://downloads.cursor.com/aptrepo stable main" | sudo tee /etc/apt/sources.list.d/cursor.list > /dev/null
+    sudo apt-get update -qq || true
+    sudo apt-get install -y cursor || true
+fi
+cat << 'EOF' | sudo tee /usr/local/bin/cursor > /dev/null
+#!/bin/bash
+exec /usr/share/cursor/cursor --no-sandbox --disable-gpu --disable-dev-shm-usage --disable-software-rasterizer=false --ozone-platform=x11 "$@"
+EOF
+sudo chmod +x /usr/local/bin/cursor
+
 echo -e "${YELLOW}[3/8] Setting up Visual Studio Code Desktop App...${NC}"
 if ! command -v code &> /dev/null; then
     wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /usr/share/keyrings/packages.microsoft.gpg > /dev/null
