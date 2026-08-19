@@ -28,14 +28,14 @@ start_services() {
 
     # 1. Start Watchdog Daemon (auto-starts everything)
     if ! pgrep -f "daily-pc-service" > /dev/null; then
-        nohup /workspaces/Work/scripts/daily-pc-service > /dev/null 2>&1 &
+        bash -c "setsid /workspaces/Work/scripts/daily-pc-service </dev/null >/dev/null 2>&1 &"
         echo -e "${GREEN}✔ Watchdog service launched.${NC}"
     else
         echo -e "${GREEN}✔ Watchdog service already running.${NC}"
     fi
 
     # Trigger immediate heal
-    sleep 2
+    sleep 3
 
     show_status
 }
@@ -47,7 +47,9 @@ stop_services() {
     pkill -f "cloudflared" 2>/dev/null || true
     pkill -f "websockify" 2>/dev/null || true
     pkill -f "audio_streamer" 2>/dev/null || true
+    tigervncserver -kill :1 2>/dev/null || true
     pkill -f "Xtigervnc" 2>/dev/null || true
+    rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
     sudo nginx -s stop 2>/dev/null || true
     echo -e "${GREEN}✔ All Cloud PC processes stopped.${NC}"
 }
