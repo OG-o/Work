@@ -64,9 +64,9 @@ def check_websocket():
 def check_audio_stream():
     try:
         req = urllib.request.Request("http://127.0.0.1:6080/audio.mp3", headers={"User-Agent": "HealthCheck/1.0"})
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
             if resp.status == 200:
-                data = resp.read(100)
+                data = resp.read(50)
                 if len(data) > 0:
                     print(f"  [{GREEN}✔ PASS{RESET}] Live Audio Streamer is serving chunked MP3 audio.")
                     return True
