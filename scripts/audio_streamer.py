@@ -2,7 +2,7 @@
 """
 Ultra-Low Latency PulseAudio Web Streamer & Mobile Window Manager API
 Streams system audio from virtual_speaker.monitor over HTTP MP3 chunked stream on port 5711.
-Provides /api/windows, /api/launch, and /api/resolution endpoints.
+Provides /api/windows, /api/launch, /api/resolution, and /api/rdp endpoints.
 """
 
 import os
@@ -135,6 +135,28 @@ def set_resolution(res_str):
     except Exception:
         return False
 
+def get_rdp_info():
+    addr = "Not available"
+    try:
+        if os.path.exists("/home/codespace/.vnc/rdp_public_address.txt"):
+            with open("/home/codespace/.vnc/rdp_public_address.txt", "r") as f:
+                addr = f.read().strip()
+    except Exception:
+        pass
+    
+    parts = addr.split(":")
+    host = parts[0] if len(parts) > 0 else "localhost"
+    port = parts[1] if len(parts) > 1 else "3389"
+    return {
+        "status": "ok",
+        "address": addr,
+        "host": host,
+        "port": port,
+        "username": "codespace",
+        "password": "codespace",
+        "download_url": "/cloudpc.rdp"
+    }
+
 class UnifiedServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ["/", "/audio.mp3", "/stream"]:
@@ -184,6 +206,15 @@ class UnifiedServerHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/api/windows"):
             windows = list_open_windows()
             data = json.dumps({"status": "ok", "count": len(windows), "windows": windows}).encode('utf-8')
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(data)
+        elif self.path.startswith("/api/rdp"):
+            rdp_info = get_rdp_info()
+            data = json.dumps(rdp_info).encode('utf-8')
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -260,7 +291,7 @@ class UnifiedServerHandler(BaseHTTPRequestHandler):
 
 def run_server():
     server = HTTPServer(("0.0.0.0", PORT), UnifiedServerHandler)
-    print(f"🔊 Live Audio & Window API listening on http://0.0.0.0:{PORT}")
+    print(f"🔊 Live Audio, Window Manager & RDP API listening on http://0.0.0.0:{PORT}")
     server.serve_forever()
 
 if __name__ == "__main__":

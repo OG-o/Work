@@ -1,4 +1,4 @@
-// Mobile Helper for noVNC - Draggable Floating Toolbar, Resolution Switcher, App Launcher, Task Switcher, Keyboard & Audio
+// Mobile Helper for noVNC - Draggable Floating Toolbar, 1-Click RDP Connect, Resolution Switcher, App Launcher, Task Switcher, Keyboard & Audio
 (function() {
   let audioElement = null;
   let isAudioPlaying = false;
@@ -8,11 +8,9 @@
     isKeyboardDisabled = localStorage.getItem('cloudpc_keyboard_disabled') === 'true';
   } catch (e) {}
 
-  // High-Density Retina Auto-Resizer
   function autoResizeToScreen() {
     if (!window.rfb) return;
 
-    // Use higher DPR multiplier (2.5x - 3.0x) for ultra-sharp mobile rendering
     const dpr = Math.max(window.devicePixelRatio || 1, 2.5);
     let w = Math.round(window.innerWidth * dpr);
     let h = Math.round(window.innerHeight * dpr);
@@ -29,6 +27,109 @@
     } catch (e) {
       console.warn("Dynamic resize request failed:", e);
     }
+  }
+
+  // ==========================================
+  // 🖥️ MICROSOFT REMOTE DESKTOP (RDP) MODAL
+  // ==========================================
+  function showRdpModal() {
+    let modal = document.getElementById('cloudpc-rdp-modal');
+    if (modal) {
+      modal.remove();
+      return;
+    }
+
+    modal = document.createElement('div');
+    modal.id = 'cloudpc-rdp-modal';
+    modal.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 440px;
+      background: rgba(24, 24, 37, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+      z-index: 1000004;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #cdd6f4;
+      animation: slideUp 0.2s ease-out;
+    `;
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    header.innerHTML = `
+      <div style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+        <span>🖥️ Microsoft Remote Desktop Connect</span>
+      </div>
+      <button id="close-rdp-modal-btn" style="background: none; border: none; color: #a6adc8; font-size: 20px; cursor: pointer; padding: 4px;">✕</button>
+    `;
+    modal.appendChild(header);
+
+    const content = document.createElement('div');
+    content.style.cssText = `display: flex; flex-direction: column; gap: 10px;`;
+    content.innerHTML = '<div style="text-align: center; padding: 15px; color: #a6adc8;">Fetching live RDP connection endpoint...</div>';
+    modal.appendChild(content);
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#close-rdp-modal-btn').addEventListener('click', () => modal.remove());
+
+    fetch('/api/rdp')
+      .then(r => r.json())
+      .then(data => {
+        const addr = data.address || 'Loading...';
+        content.innerHTML = `
+          <div style="background: rgba(49, 50, 68, 0.8); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px;">
+            <div style="font-size: 12px; color: #a6adc8; margin-bottom: 4px;">PC Name / Host Name for Remote Desktop App:</div>
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #181825; padding: 8px 12px; border-radius: 10px; border: 1px solid #45475a;">
+              <span id="rdp-addr-text" style="font-family: monospace; font-size: 13px; font-weight: 700; color: #a6e3a1; word-break: break-all;">${addr}</span>
+              <button id="copy-rdp-btn" style="background: #89b4fa; color: #11111b; border: none; padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: 6px; white-space: nowrap;">📋 Copy</button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div style="background: rgba(49, 50, 68, 0.8); padding: 10px; border-radius: 12px; font-size: 12px;">
+              <span style="color: #a6adc8;">Username:</span> <strong style="color: #cdd6f4;">codespace</strong>
+            </div>
+            <div style="background: rgba(49, 50, 68, 0.8); padding: 10px; border-radius: 12px; font-size: 12px;">
+              <span style="color: #a6adc8;">Password:</span> <strong style="color: #cdd6f4;">codespace</strong>
+            </div>
+          </div>
+
+          <a href="/cloudpc.rdp" download="cloudpc.rdp" style="display: block; text-align: center; text-decoration: none; background: #cba6f7; color: #11111b; padding: 11px; border-radius: 14px; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 4px;">
+            📥 Download 1-Click .RDP File
+          </a>
+          <small style="color: #a6adc8; text-align: center; font-size: 11px;">Opening the .rdp file connects automatically with zero lag.</small>
+        `;
+
+        const copyBtn = modal.querySelector('#copy-rdp-btn');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(addr).then(() => {
+              copyBtn.innerHTML = '✔ Copied!';
+              setTimeout(() => { copyBtn.innerHTML = '📋 Copy'; }, 2000);
+            });
+          });
+        }
+      })
+      .catch(err => {
+        content.innerHTML = `<div style="color: #f38ba8; text-align: center;">Error loading RDP info: ${err}</div>`;
+      });
   }
 
   // ==========================================
@@ -564,7 +665,27 @@
       touch-action: manipulation;
     `;
 
-    // 3. Resolution Selector Button
+    // 3. RDP Connect Button
+    const rdpBtn = document.createElement('button');
+    rdpBtn.id = 'mobile-rdp-btn';
+    rdpBtn.innerHTML = '🖥️ RDP';
+    rdpBtn.title = 'Microsoft Remote Desktop connection info & .rdp download';
+    rdpBtn.style.cssText = `
+      background: #89dceb;
+      color: #11111b;
+      border: none;
+      padding: 7px 9px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      touch-action: manipulation;
+    `;
+
+    // 4. Resolution Selector Button
     const resBtn = document.createElement('button');
     resBtn.id = 'mobile-res-btn';
     resBtn.innerHTML = '📺 Res';
@@ -584,7 +705,7 @@
       touch-action: manipulation;
     `;
 
-    // 4. Dynamic Mode Toggle Button (Mobile vs Desktop)
+    // 5. Dynamic Mode Toggle Button (Mobile vs Desktop)
     const modeBtn = document.createElement('button');
     modeBtn.id = 'mobile-mode-toggle';
     modeBtn.innerHTML = '📱 Fit';
@@ -604,7 +725,7 @@
       touch-action: manipulation;
     `;
 
-    // 5. Audio Toggle Button
+    // 6. Audio Toggle Button
     const audioBtn = document.createElement('button');
     audioBtn.id = 'mobile-audio-toggle';
     audioBtn.innerHTML = '🔊 Sound';
@@ -623,7 +744,7 @@
       touch-action: manipulation;
     `;
 
-    // 6. Keyboard Summon Button (Type)
+    // 7. Keyboard Summon Button (Type)
     const kbBtn = document.createElement('button');
     kbBtn.id = 'mobile-keyboard-btn';
     kbBtn.innerHTML = '⌨️ Type';
@@ -643,7 +764,7 @@
       touch-action: manipulation;
     `;
 
-    // 7. Permanent Keyboard Disable / Enable Lock Button
+    // 8. Permanent Keyboard Disable / Enable Lock Button
     const kbLockBtn = document.createElement('button');
     kbLockBtn.id = 'mobile-kblock-btn';
     kbLockBtn.title = 'Permanently disable or enable keyboard';
@@ -676,7 +797,7 @@
     `;
     updateKbLockUI();
 
-    // 8. Send Text / Paste Prompt Button
+    // 9. Send Text / Paste Prompt Button
     const pasteBtn = document.createElement('button');
     pasteBtn.innerHTML = '💬 Paste';
     pasteBtn.style.cssText = `
@@ -809,6 +930,12 @@
       showWindowManagerModal();
     }));
 
+    // RDP Connect Modal Button
+    rdpBtn.addEventListener('click', safeClick(function(e) {
+      e.stopPropagation();
+      showRdpModal();
+    }));
+
     // Resolution Switcher Button
     resBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
@@ -939,6 +1066,7 @@
     bar.appendChild(grip);
     bar.appendChild(appsBtn);
     bar.appendChild(winBtn);
+    bar.appendChild(rdpBtn);
     bar.appendChild(resBtn);
     bar.appendChild(modeBtn);
     bar.appendChild(audioBtn);
