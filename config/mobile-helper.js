@@ -1,7 +1,13 @@
-// Mobile Helper for noVNC - Draggable Floating Toolbar, Instant Keyboard & Audio
+// Mobile Helper for noVNC - Draggable Floating Toolbar, Instant Keyboard & Audio, Permanent Keyboard Disable
 (function() {
   let audioElement = null;
   let isAudioPlaying = false;
+  let isKeyboardDisabled = false;
+
+  // Restore keyboard disabled state from localStorage
+  try {
+    isKeyboardDisabled = localStorage.getItem('cloudpc_keyboard_disabled') === 'true';
+  } catch (e) {}
 
   // Dynamic Auto-Resize to exact phone/screen dimensions
   function autoResizeToScreen() {
@@ -83,69 +89,105 @@
     // 1. Dynamic Mode Toggle Button (Mobile vs Desktop)
     const modeBtn = document.createElement('button');
     modeBtn.id = 'mobile-mode-toggle';
-    modeBtn.innerHTML = '📱 Auto-Fit';
+    modeBtn.innerHTML = '📱 Fit';
+    modeBtn.title = 'Auto-fit screen resolution';
     modeBtn.style.cssText = `
       background: #89b4fa;
       color: #11111b;
       border: none;
-      padding: 8px 12px;
+      padding: 7px 11px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       touch-action: manipulation;
     `;
 
     // 2. Audio Toggle Button
     const audioBtn = document.createElement('button');
     audioBtn.id = 'mobile-audio-toggle';
-    audioBtn.innerHTML = '🔊 Audio';
+    audioBtn.innerHTML = '🔊 Sound';
     audioBtn.style.cssText = `
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 8px 12px;
+      padding: 7px 11px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       touch-action: manipulation;
     `;
 
-    // 3. Keyboard Toggle Button
+    // 3. Keyboard Summon Button (Type)
     const kbBtn = document.createElement('button');
-    kbBtn.innerHTML = '⌨️ KB';
+    kbBtn.id = 'mobile-keyboard-btn';
+    kbBtn.innerHTML = '⌨️ Type';
+    kbBtn.title = 'Open phone keyboard';
     kbBtn.style.cssText = `
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 8px 12px;
+      padding: 7px 11px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       touch-action: manipulation;
     `;
 
-    // 4. Send Text / Paste Prompt Button
+    // 4. Permanent Keyboard Disable / Enable Lock Button
+    const kbLockBtn = document.createElement('button');
+    kbLockBtn.id = 'mobile-kblock-btn';
+    kbLockBtn.title = 'Permanently disable or enable keyboard';
+    
+    function updateKbLockUI() {
+      if (isKeyboardDisabled) {
+        kbLockBtn.innerHTML = '🚫 KB: OFF';
+        kbLockBtn.style.background = '#f38ba8';
+        kbLockBtn.style.color = '#11111b';
+        kbLockBtn.style.border = '1px solid #f38ba8';
+        kbBtn.style.opacity = '0.4';
+        kbBtn.style.pointerEvents = 'none';
+      } else {
+        kbLockBtn.innerHTML = '✅ KB: ON';
+        kbLockBtn.style.background = '#313244';
+        kbLockBtn.style.color = '#a6e3a1';
+        kbLockBtn.style.border = '1px solid #a6e3a1';
+        kbBtn.style.opacity = '1.0';
+        kbBtn.style.pointerEvents = 'auto';
+      }
+    }
+    
+    kbLockBtn.style.cssText = `
+      padding: 7px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+    `;
+    updateKbLockUI();
+
+    // 5. Send Text / Paste Prompt Button
     const pasteBtn = document.createElement('button');
     pasteBtn.innerHTML = '💬 Paste';
     pasteBtn.style.cssText = `
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 8px 11px;
+      padding: 7px 10px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       touch-action: manipulation;
@@ -285,7 +327,7 @@
           isAudioPlaying = true;
           audioBtn.style.background = '#a6e3a1';
           audioBtn.style.color = '#11111b';
-          audioBtn.innerHTML = '🔊 Audio: ON';
+          audioBtn.innerHTML = '🔊 ON';
         }).catch(err => {
           console.error("Audio autoplay error:", err);
           alert("Please tap again to allow audio playback.");
@@ -296,7 +338,7 @@
         isAudioPlaying = false;
         audioBtn.style.background = '#313244';
         audioBtn.style.color = '#cdd6f4';
-        audioBtn.innerHTML = '🔇 Audio: OFF';
+        audioBtn.innerHTML = '🔇 OFF';
       }
     }));
 
@@ -341,9 +383,11 @@
       }
     });
 
-    // Keyboard trigger
+    // Keyboard trigger (only if not disabled)
     kbBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
+      if (isKeyboardDisabled) return;
+
       const novncKb = document.getElementById('noVNC_keyboard_button');
       if (novncKb) novncKb.click();
       const novncInput = document.getElementById('noVNC_keyboardinput');
@@ -353,6 +397,23 @@
         hiddenInput.style.display = hiddenInput.style.display === 'none' ? 'block' : 'none';
         if (hiddenInput.style.display === 'block') hiddenInput.focus();
       }
+    }));
+
+    // Permanent Keyboard Lock/Disable Toggle
+    kbLockBtn.addEventListener('click', safeClick(function(e) {
+      e.stopPropagation();
+      isKeyboardDisabled = !isKeyboardDisabled;
+      try {
+        localStorage.setItem('cloudpc_keyboard_disabled', isKeyboardDisabled ? 'true' : 'false');
+      } catch (err) {}
+
+      if (isKeyboardDisabled) {
+        hiddenInput.style.display = 'none';
+        hiddenInput.blur();
+        const novncInput = document.getElementById('noVNC_keyboardinput');
+        if (novncInput) novncInput.blur();
+      }
+      updateKbLockUI();
     }));
 
     // Paste prompt
@@ -372,6 +433,7 @@
     bar.appendChild(modeBtn);
     bar.appendChild(audioBtn);
     bar.appendChild(kbBtn);
+    bar.appendChild(kbLockBtn);
     bar.appendChild(pasteBtn);
     document.body.appendChild(bar);
     document.body.appendChild(hiddenInput);
