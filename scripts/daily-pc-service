@@ -12,10 +12,10 @@ check_and_heal() {
     # 1. TigerVNC Display :1
     if ! pgrep -f "Xtigervnc :1" > /dev/null; then
         echo "$(date) [WATCHDOG] Reviving TigerVNC :1..." >> "$LOG_FILE"
+        rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
         export DISPLAY=:1
-        nohup Xtigervnc :1 -geometry 1920x1080 -depth 24 -SecurityTypes None -rfbport 5901 > /dev/null 2>&1 &
+        nohup tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None --I-KNOW-THIS-IS-INSECURE > /dev/null 2>&1 &
         sleep 2
-        nohup dbus-run-session xfce4-session > /dev/null 2>&1 &
     fi
 
     # 2. PulseAudio Virtual Speaker
