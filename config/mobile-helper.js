@@ -1,4 +1,4 @@
-// Mobile Helper for noVNC - Draggable Floating Toolbar, App Launcher, Task Switcher, Keyboard & Audio
+// Mobile Helper for noVNC - Draggable Floating Toolbar, Resolution Switcher, App Launcher, Task Switcher, Keyboard & Audio
 (function() {
   let audioElement = null;
   let isAudioPlaying = false;
@@ -8,18 +8,19 @@
     isKeyboardDisabled = localStorage.getItem('cloudpc_keyboard_disabled') === 'true';
   } catch (e) {}
 
-  // Dynamic Auto-Resize to exact phone/screen dimensions
+  // High-Density Retina Auto-Resizer
   function autoResizeToScreen() {
     if (!window.rfb) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Use higher DPR multiplier (2.5x - 3.0x) for ultra-sharp mobile rendering
+    const dpr = Math.max(window.devicePixelRatio || 1, 2.5);
     let w = Math.round(window.innerWidth * dpr);
     let h = Math.round(window.innerHeight * dpr);
 
     w = w % 2 === 0 ? w : w - 1;
     h = h % 2 === 0 ? h : h - 1;
-    w = Math.max(w, 640);
-    h = Math.max(h, 640);
+    w = Math.max(w, 1080);
+    h = Math.max(h, 1080);
 
     try {
       if (window.rfb._sock && window.rfb._sock.rQwait) {
@@ -28,6 +29,123 @@
     } catch (e) {
       console.warn("Dynamic resize request failed:", e);
     }
+  }
+
+  // ==========================================
+  // 📺 RESOLUTION SWITCHER MODAL
+  // ==========================================
+  function showResolutionModal() {
+    let modal = document.getElementById('cloudpc-res-modal');
+    if (modal) {
+      modal.remove();
+      return;
+    }
+
+    modal = document.createElement('div');
+    modal.id = 'cloudpc-res-modal';
+    modal.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 440px;
+      background: rgba(24, 24, 37, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+      z-index: 1000003;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #cdd6f4;
+      animation: slideUp 0.2s ease-out;
+    `;
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    header.innerHTML = `
+      <div style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+        <span>📺 Display Resolution Selector</span>
+      </div>
+      <button id="close-res-modal-btn" style="background: none; border: none; color: #a6adc8; font-size: 20px; cursor: pointer; padding: 4px;">✕</button>
+    `;
+    modal.appendChild(header);
+
+    const resolutions = [
+      { name: '1080p Full HD', res: '1920x1080', icon: '🌟', badge: 'Crisp Landscape' },
+      { name: '2K Quad HD', res: '2560x1440', icon: '🚀', badge: 'Ultra Sharp' },
+      { name: 'Mobile FHD+', res: '1080x2400', icon: '📱', badge: 'Modern Phone' },
+      { name: 'Mobile FHD', res: '1080x1920', icon: '📱', badge: 'Standard Phone' },
+      { name: '720p HD', res: '1280x720', icon: '⚡', badge: 'Balanced' }
+    ];
+
+    const list = document.createElement('div');
+    list.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    `;
+
+    resolutions.forEach(r => {
+      const item = document.createElement('div');
+      item.style.cssText = `
+        background: rgba(49, 50, 68, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 12px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.15s;
+      `;
+
+      item.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 20px;">${r.icon}</span>
+          <div>
+            <div style="font-size: 14px; font-weight: 700; color: #cdd6f4;">${r.name}</div>
+            <div style="font-size: 11px; color: #a6adc8;">${r.res}</div>
+          </div>
+        </div>
+        <span style="background: rgba(137, 180, 250, 0.2); color: #89b4fa; padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 700;">${r.badge}</span>
+      `;
+
+      item.addEventListener('click', () => {
+        item.style.background = '#89b4fa';
+        fetch('/api/resolution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolution: r.res })
+        }).then(() => {
+          if (window.rfb) {
+            const parts = r.res.split('x');
+            try {
+              window.rfb.requestDesktopSize(parseInt(parts[0]), parseInt(parts[1]));
+            } catch (e) {}
+          }
+          modal.remove();
+        });
+      });
+
+      list.appendChild(item);
+    });
+
+    modal.appendChild(list);
+    document.body.appendChild(modal);
+
+    modal.querySelector('#close-res-modal-btn').addEventListener('click', () => modal.remove());
   }
 
   // ==========================================
@@ -415,7 +533,7 @@
       background: #fab387;
       color: #11111b;
       border: none;
-      padding: 7px 10px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 800;
@@ -435,7 +553,7 @@
       background: #cba6f7;
       color: #11111b;
       border: none;
-      padding: 7px 10px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 800;
@@ -446,7 +564,27 @@
       touch-action: manipulation;
     `;
 
-    // 3. Dynamic Mode Toggle Button (Mobile vs Desktop)
+    // 3. Resolution Selector Button
+    const resBtn = document.createElement('button');
+    resBtn.id = 'mobile-res-btn';
+    resBtn.innerHTML = '📺 Res';
+    resBtn.title = 'Switch display resolution (1080p, 2K, Mobile)';
+    resBtn.style.cssText = `
+      background: #a6e3a1;
+      color: #11111b;
+      border: none;
+      padding: 7px 9px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      touch-action: manipulation;
+    `;
+
+    // 4. Dynamic Mode Toggle Button (Mobile vs Desktop)
     const modeBtn = document.createElement('button');
     modeBtn.id = 'mobile-mode-toggle';
     modeBtn.innerHTML = '📱 Fit';
@@ -466,7 +604,7 @@
       touch-action: manipulation;
     `;
 
-    // 4. Audio Toggle Button
+    // 5. Audio Toggle Button
     const audioBtn = document.createElement('button');
     audioBtn.id = 'mobile-audio-toggle';
     audioBtn.innerHTML = '🔊 Sound';
@@ -485,7 +623,7 @@
       touch-action: manipulation;
     `;
 
-    // 5. Keyboard Summon Button (Type)
+    // 6. Keyboard Summon Button (Type)
     const kbBtn = document.createElement('button');
     kbBtn.id = 'mobile-keyboard-btn';
     kbBtn.innerHTML = '⌨️ Type';
@@ -505,7 +643,7 @@
       touch-action: manipulation;
     `;
 
-    // 6. Permanent Keyboard Disable / Enable Lock Button
+    // 7. Permanent Keyboard Disable / Enable Lock Button
     const kbLockBtn = document.createElement('button');
     kbLockBtn.id = 'mobile-kblock-btn';
     kbLockBtn.title = 'Permanently disable or enable keyboard';
@@ -538,7 +676,7 @@
     `;
     updateKbLockUI();
 
-    // 7. Send Text / Paste Prompt Button
+    // 8. Send Text / Paste Prompt Button
     const pasteBtn = document.createElement('button');
     pasteBtn.innerHTML = '💬 Paste';
     pasteBtn.style.cssText = `
@@ -671,6 +809,12 @@
       showWindowManagerModal();
     }));
 
+    // Resolution Switcher Button
+    resBtn.addEventListener('click', safeClick(function(e) {
+      e.stopPropagation();
+      showResolutionModal();
+    }));
+
     // Auto-Fit / Mode Switcher
     modeBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
@@ -795,6 +939,7 @@
     bar.appendChild(grip);
     bar.appendChild(appsBtn);
     bar.appendChild(winBtn);
+    bar.appendChild(resBtn);
     bar.appendChild(modeBtn);
     bar.appendChild(audioBtn);
     bar.appendChild(kbBtn);
