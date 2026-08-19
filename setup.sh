@@ -62,6 +62,9 @@ sudo apt-get install -y --no-install-recommends \
 
 # 2. Install Google Chrome with Container Sandbox Flags
 echo -e "${YELLOW}[2/8] Setting up Google Chrome with container software rasterization...${NC}"
+# Install Chrome DevTools MCP and configure Remote Debugging
+npm install -g chrome-devtools-mcp @modelcontextprotocol/sdk puppeteer 2>/dev/null || true
+
 if ! command -v google-chrome &> /dev/null; then
     wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb || true
     sudo apt-get install -y /tmp/chrome.deb || true
