@@ -1,4 +1,4 @@
-// Mobile Helper for noVNC - Dynamic Screen Resizer, Instant Keyboard & Audio
+// Mobile Helper for noVNC - Draggable Floating Toolbar, Instant Keyboard & Audio
 (function() {
   let audioElement = null;
   let isAudioPlaying = false;
@@ -7,19 +7,14 @@
   function autoResizeToScreen() {
     if (!window.rfb) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x for sharp rendering without lag
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     let w = Math.round(window.innerWidth * dpr);
     let h = Math.round(window.innerHeight * dpr);
 
-    // Ensure even dimensions
     w = w % 2 === 0 ? w : w - 1;
     h = h % 2 === 0 ? h : h - 1;
-
-    // Minimum sensible resolution
     w = Math.max(w, 640);
     h = Math.max(h, 640);
-
-    console.log(`[AutoResize] Setting remote X11 desktop size: ${w}x${h} (DPR: ${dpr})`);
 
     try {
       if (window.rfb._sock && window.rfb._sock.rQwait) {
@@ -33,24 +28,56 @@
   function initMobileHelper() {
     if (document.getElementById('mobile-quick-toolbar')) return;
 
-    // Create toolbar container
+    // Create draggable floating toolbar container
     const bar = document.createElement('div');
     bar.id = 'mobile-quick-toolbar';
     bar.style.cssText = `
       position: fixed;
-      top: 10px;
-      right: 10px;
+      top: 12px;
+      right: 12px;
       z-index: 999999;
       display: flex;
+      align-items: center;
       gap: 6px;
-      background: rgba(24, 24, 37, 0.90);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(24, 24, 37, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       padding: 6px 10px;
       border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.20);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      cursor: grab;
+      transition: box-shadow 0.2s, transform 0.1s;
+    `;
+
+    // Restore saved position from localStorage
+    try {
+      const savedX = localStorage.getItem('cloudpc_toolbar_x');
+      const savedY = localStorage.getItem('cloudpc_toolbar_y');
+      if (savedX !== null && savedY !== null) {
+        bar.style.left = `${Math.min(Math.max(10, parseInt(savedX, 10)), window.innerWidth - 200)}px`;
+        bar.style.top = `${Math.min(Math.max(10, parseInt(savedY, 10)), window.innerHeight - 60)}px`;
+        bar.style.right = 'auto';
+      }
+    } catch (e) {}
+
+    // 0. Drag Grip Handle Indicator
+    const grip = document.createElement('div');
+    grip.id = 'mobile-toolbar-grip';
+    grip.innerHTML = '⋮⋮';
+    grip.title = 'Drag me anywhere';
+    grip.style.cssText = `
+      color: #a6adc8;
+      font-size: 16px;
+      font-weight: bold;
+      padding: 0 4px;
+      cursor: grab;
+      letter-spacing: -2px;
+      touch-action: none;
     `;
 
     // 1. Dynamic Mode Toggle Button (Mobile vs Desktop)
@@ -124,16 +151,128 @@
       touch-action: manipulation;
     `;
 
+    // ==========================================
+    // 🖐️ DRAG & DROP ENGINE (Touch + Mouse)
+    // ==========================================
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let barStartX = 0;
+    let barStartY = 0;
+    let hasMoved = false;
+
+    function onPointerDown(clientX, clientY) {
+      isDragging = true;
+      hasMoved = false;
+      dragStartX = clientX;
+      dragStartY = clientY;
+
+      const rect = bar.getBoundingClientRect();
+      barStartX = rect.left;
+      barStartY = rect.top;
+
+      bar.style.cursor = 'grabbing';
+      bar.style.transform = 'scale(1.03)';
+      bar.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.8)';
+    }
+
+    function onPointerMove(clientX, clientY) {
+      if (!isDragging) return;
+
+      const deltaX = clientX - dragStartX;
+      const deltaY = clientY - dragStartY;
+
+      if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+        hasMoved = true;
+      }
+
+      let newX = barStartX + deltaX;
+      let newY = barStartY + deltaY;
+
+      // Clamp within screen boundaries
+      const maxX = window.innerWidth - bar.offsetWidth - 6;
+      const maxY = window.innerHeight - bar.offsetHeight - 6;
+      newX = Math.max(6, Math.min(newX, maxX));
+      newY = Math.max(6, Math.min(newY, maxY));
+
+      bar.style.left = `${newX}px`;
+      bar.style.top = `${newY}px`;
+      bar.style.right = 'auto';
+      bar.style.bottom = 'auto';
+    }
+
+    function onPointerUp() {
+      if (!isDragging) return;
+      isDragging = false;
+      bar.style.cursor = 'grab';
+      bar.style.transform = 'scale(1.0)';
+      bar.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.6)';
+
+      if (hasMoved) {
+        try {
+          const rect = bar.getBoundingClientRect();
+          localStorage.setItem('cloudpc_toolbar_x', Math.round(rect.left));
+          localStorage.setItem('cloudpc_toolbar_y', Math.round(rect.top));
+        } catch (e) {}
+      }
+    }
+
+    // Touch events for mobile phones
+    bar.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        onPointerDown(touch.clientX, touch.clientY);
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', function(e) {
+      if (isDragging && e.touches.length === 1) {
+        const touch = e.touches[0];
+        onPointerMove(touch.clientX, touch.clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', onPointerUp, { passive: true });
+    window.addEventListener('touchcancel', onPointerUp, { passive: true });
+
+    // Mouse events for desktop/laptop
+    bar.addEventListener('mousedown', function(e) {
+      if (e.target.tagName !== 'BUTTON') {
+        onPointerDown(e.clientX, e.clientY);
+      }
+    });
+
+    window.addEventListener('mousemove', function(e) {
+      if (isDragging) {
+        onPointerMove(e.clientX, e.clientY);
+      }
+    });
+
+    window.addEventListener('mouseup', onPointerUp);
+
+    // Click handler helper (ignores click if user was dragging)
+    function safeClick(handler) {
+      return function(e) {
+        if (hasMoved) {
+          e.stopPropagation();
+          e.preventDefault();
+          return;
+        }
+        handler(e);
+      };
+    }
+
     // Auto-Fit / Mode Switcher
-    modeBtn.addEventListener('click', function(e) {
+    modeBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       autoResizeToScreen();
       modeBtn.style.background = '#a6e3a1';
       setTimeout(() => { modeBtn.style.background = '#89b4fa'; }, 500);
-    });
+    }));
 
     // Audio Play/Pause Handler
-    audioBtn.addEventListener('click', function(e) {
+    audioBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       if (!audioElement) {
         audioElement = new Audio();
@@ -159,7 +298,7 @@
         audioBtn.style.color = '#cdd6f4';
         audioBtn.innerHTML = '🔇 Audio: OFF';
       }
-    });
+    }));
 
     // Hidden input for mobile keyboard
     const hiddenInput = document.createElement('input');
@@ -203,7 +342,7 @@
     });
 
     // Keyboard trigger
-    kbBtn.addEventListener('click', function(e) {
+    kbBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       const novncKb = document.getElementById('noVNC_keyboard_button');
       if (novncKb) novncKb.click();
@@ -214,10 +353,10 @@
         hiddenInput.style.display = hiddenInput.style.display === 'none' ? 'block' : 'none';
         if (hiddenInput.style.display === 'block') hiddenInput.focus();
       }
-    });
+    }));
 
     // Paste prompt
-    pasteBtn.addEventListener('click', function(e) {
+    pasteBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       const input = prompt('Enter or paste text to send to your PC:');
       if (input && window.rfb) {
@@ -227,8 +366,9 @@
           window.rfb.sendKey(code, null, false);
         }
       }
-    });
+    }));
 
+    bar.appendChild(grip);
     bar.appendChild(modeBtn);
     bar.appendChild(audioBtn);
     bar.appendChild(kbBtn);
@@ -236,17 +376,14 @@
     document.body.appendChild(bar);
     document.body.appendChild(hiddenInput);
 
-    // When connection is established, trigger auto-resizing to screen
+    // Auto-resizing setup
     const checkRFB = setInterval(function() {
       if (window.UI && window.UI.rfb) {
         window.rfb = window.UI.rfb;
         window.rfb.scaleViewport = true;
         window.rfb.resizeSession = true;
 
-        // Auto resize after 1 second
         setTimeout(autoResizeToScreen, 1000);
-
-        // Listen for screen rotation / resize
         window.addEventListener('resize', () => {
           setTimeout(autoResizeToScreen, 300);
         });
