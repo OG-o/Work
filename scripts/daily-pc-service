@@ -1,59 +1,61 @@
 #!/bin/bash
-# ==============================================================================
-# Cloud PC 24/7 Master Watchdog & Self-Healing Service
-# Automatically ensures TigerVNC, PulseAudio, Audio Streamer, Websockify,
-# Nginx Gateway, and Cloudflare Tunnel stay continuously running.
-# ==============================================================================
+# Ubuntu 24.04 Cloud PC 24/7 Watchdog Service Daemon
+# Continuously monitors and auto-heals core desktop, audio, bridge, gateway, and tunnel processes.
 
-LOG_FILE="/home/codespace/.vnc/watchdog.log"
-mkdir -p /home/codespace/.vnc
+SERVICE_DIR="/workspaces/Work"
+USER_HOME="/home/codespace"
+LOG_DIR="${USER_HOME}/.vnc"
 
-check_and_heal() {
-    # 1. TigerVNC Display :1
-    if ! pgrep -f "Xtigervnc :1" > /dev/null; then
-        echo "$(date) [WATCHDOG] Reviving TigerVNC :1..." >> "$LOG_FILE"
+mkdir -p "$LOG_DIR"
+
+log_msg() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [CloudPC Watchdog] $1" >> "${LOG_DIR}/daily-service.log"
+}
+
+check_and_start_vnc() {
+    if ! pgrep -f "Xvnc :1" > /dev/null; then
+        log_msg "Restarting TigerVNC Server on :1..."
+        vncserver -kill :1 2>/dev/null || true
         rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
-        export DISPLAY=:1
-        nohup tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None --I-KNOW-THIS-IS-INSECURE > /dev/null 2>&1 &
-        sleep 2
-    fi
-
-    # 2. PulseAudio Virtual Speaker
-    if ! pgrep -f "pulseaudio" > /dev/null; then
-        echo "$(date) [WATCHDOG] Reviving PulseAudio..." >> "$LOG_FILE"
-        pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
-        sleep 1
-        pactl load-module module-null-sink sink_name=virtual_speaker sink_properties=device.description=Virtual_Speaker 2>/dev/null || true
-        pactl set-default-sink virtual_speaker 2>/dev/null || true
-    fi
-
-    # 3. Audio Streamer (Port 5711)
-    if ! pgrep -f "audio_streamer.py" > /dev/null; then
-        echo "$(date) [WATCHDOG] Reviving Audio Streamer..." >> "$LOG_FILE"
-        nohup python3 /workspaces/Work/scripts/audio_streamer.py > /dev/null 2>&1 &
-    fi
-
-    # 4. Websockify (Port 6081)
-    if ! pgrep -f "websockify 6081" > /dev/null; then
-        echo "$(date) [WATCHDOG] Reviving Websockify 6081..." >> "$LOG_FILE"
-        nohup /usr/bin/websockify 6081 127.0.0.1:5901 > /dev/null 2>&1 &
-    fi
-
-    # 5. Nginx Gateway (Port 6080)
-    if ! pgrep -f "nginx: master" > /dev/null; then
-        echo "$(date) [WATCHDOG] Reviving Nginx..." >> "$LOG_FILE"
-        sudo nginx 2>/dev/null || true
-    fi
-
-    # 6. Cloudflare Tunnel
-    if ! pgrep -f "cloudflared tunnel" > /dev/null; then
-        echo "$(date) [WATCHDOG] Reviving Cloudflare Tunnel..." >> "$LOG_FILE"
-        nohup /usr/local/bin/cloudflared tunnel --edge-ip-version 4 --url http://127.0.0.1:6080 > /home/codespace/.vnc/cloudflared.log 2>&1 &
+        vncserver :1 -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes None >> "${LOG_DIR}/vnc.log" 2>&1
     fi
 }
 
-echo "$(date) [WATCHDOG] Starting Cloud PC Master Watchdog Daemon..." >> "$LOG_FILE"
+check_and_start_audio() {
+    if ! pgrep -f "audio_streamer.py" > /dev/null; then
+        log_msg "Restarting Audio Streamer..."
+        nohup python3 "${SERVICE_DIR}/scripts/audio_streamer.py" >> "${LOG_DIR}/audio.log" 2>&1 &
+    fi
+}
+
+check_and_start_websockify() {
+    if ! pgrep -f "websockify.*6081" > /dev/null; then
+        log_msg "Restarting Websockify VNC Bridge..."
+        nohup websockify --web /usr/share/novnc 6081 127.0.0.1:5901 >> "${LOG_DIR}/websockify.log" 2>&1 &
+    fi
+}
+
+check_and_start_nginx() {
+    if ! pgrep -f "nginx: master process" > /dev/null; then
+        log_msg "Restarting Nginx Unified Gateway..."
+        sudo service nginx restart >> "${LOG_DIR}/nginx.log" 2>&1
+    fi
+}
+
+check_and_start_tunnel() {
+    if ! pgrep -f "cloudflared tunnel" > /dev/null; then
+        log_msg "Restarting Cloudflare Public Tunnel..."
+        nohup cloudflared tunnel --url http://127.0.0.1:6080 >> "${LOG_DIR}/tunnel.log" 2>&1 &
+    fi
+}
+
+log_msg "Watchdog service started."
+
 while true; do
-    check_and_heal
-    sleep 10
+    check_and_start_vnc
+    check_and_start_audio
+    check_and_start_websockify
+    check_and_start_nginx
+    check_and_start_tunnel
+    sleep 5
 done
