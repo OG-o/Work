@@ -1,0 +1,16 @@
+========================================================
+   🖥️ WINDOWS REMOTE DESKTOP (MSTSC) CONNECTION INFO   
+========================================================
+
+👉 PC Name / Computer: rfywz-4-240-18-226.run.pinggy-free.link:42473
+👉 Username:           codespace
+👉 Password:           codespace
+👉 Session:            Live Desktop / Xorg
+
+--------------------------------------------------------
+Instructions for Windows Remote Desktop (mstsc / Mobile):
+1. Open Remote Desktop Connection app
+2. In 'Computer' or 'PC Name', enter: rfywz-4-240-18-226.run.pinggy-free.link:42473
+3. Enter User: codespace | Password: codespace
+4. Tap Connect!
+========================================================
