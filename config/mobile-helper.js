@@ -1,10 +1,9 @@
-// Mobile Helper for noVNC - Draggable Floating Toolbar, Instant Keyboard & Audio, Permanent Keyboard Disable
+// Mobile Helper for noVNC - Draggable Floating Toolbar, Mobile Task Switcher / Window Manager, Keyboard & Audio
 (function() {
   let audioElement = null;
   let isAudioPlaying = false;
   let isKeyboardDisabled = false;
 
-  // Restore keyboard disabled state from localStorage
   try {
     isKeyboardDisabled = localStorage.getItem('cloudpc_keyboard_disabled') === 'true';
   } catch (e) {}
@@ -29,6 +28,206 @@
     } catch (e) {
       console.warn("Dynamic resize request failed:", e);
     }
+  }
+
+  // ==========================================
+  // 🗂️ MOBILE TASK SWITCHER & WINDOW MANAGER
+  // ==========================================
+  function showWindowManagerModal() {
+    let modal = document.getElementById('cloudpc-window-modal');
+    if (modal) {
+      modal.remove();
+      return;
+    }
+
+    modal = document.createElement('div');
+    modal.id = 'cloudpc-window-modal';
+    modal.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 480px;
+      max-height: 75vh;
+      background: rgba(24, 24, 37, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+      z-index: 1000001;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #cdd6f4;
+      animation: slideUp 0.2s ease-out;
+    `;
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    header.innerHTML = `
+      <div style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+        <span>🗂️ Active Windows & Recent Tabs</span>
+      </div>
+      <button id="close-modal-btn" style="background: none; border: none; color: #a6adc8; font-size: 20px; cursor: pointer; padding: 4px;">✕</button>
+    `;
+    modal.appendChild(header);
+
+    const listContainer = document.createElement('div');
+    listContainer.style.cssText = `
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 50vh;
+      padding: 4px 0;
+    `;
+    listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #a6adc8;">Loading active windows...</div>';
+    modal.appendChild(listContainer);
+
+    const footer = document.createElement('div');
+    footer.style.cssText = `
+      display: flex;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+
+    const centerAllBtn = document.createElement('button');
+    centerAllBtn.innerHTML = '🎯 Center All Windows on Screen';
+    centerAllBtn.style.cssText = `
+      flex: 1;
+      background: #89b4fa;
+      color: #11111b;
+      border: none;
+      padding: 10px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    `;
+    footer.appendChild(centerAllBtn);
+    modal.appendChild(footer);
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#close-modal-btn').addEventListener('click', () => modal.remove());
+
+    // Fetch and render windows list
+    function loadWindows() {
+      fetch('/api/windows')
+        .then(r => r.json())
+        .then(data => {
+          listContainer.innerHTML = '';
+          if (!data.windows || data.windows.length === 0) {
+            listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #a6adc8;">No application windows open.<br><small style="color: #6c7086;">Open an app like Chrome, Cursor, or Terminal.</small></div>';
+            return;
+          }
+
+          data.windows.forEach(win => {
+            const item = document.createElement('div');
+            item.style.cssText = `
+              background: rgba(49, 50, 68, 0.8);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 14px;
+              padding: 10px 12px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              gap: 8px;
+              cursor: pointer;
+              transition: background 0.15s;
+            `;
+
+            let icon = '💻';
+            if (win.app.includes('Chrome')) icon = '🌐';
+            else if (win.app.includes('Cursor')) icon = '🤖';
+            else if (win.app.includes('Code')) icon = '📝';
+            else if (win.app.includes('Terminal')) icon = '📟';
+            else if (win.app.includes('File')) icon = '📂';
+            else if (win.app.includes('BlueStacks')) icon = '🎮';
+
+            item.innerHTML = `
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 14px; font-weight: 700; color: #89b4fa; display: flex; align-items: center; gap: 5px;">
+                  <span>${icon}</span> <span>${win.app}</span>
+                </div>
+                <div style="font-size: 12px; color: #a6adc8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+                  ${win.title || win.app}
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px;" onclick="event.stopPropagation()">
+                <button class="win-action-btn" data-action="center" data-id="${win.id}" style="background: #a6e3a1; color: #11111b; border: none; padding: 6px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer;">🎯 Center</button>
+                <button class="win-action-btn" data-action="maximize" data-id="${win.id}" style="background: #fab387; color: #11111b; border: none; padding: 6px 10px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer;">📐 Max</button>
+                <button class="win-action-btn" data-action="close" data-id="${win.id}" style="background: #f38ba8; color: #11111b; border: none; padding: 6px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer;">✕</button>
+              </div>
+            `;
+
+            // Tap item to bring to front and center
+            item.addEventListener('click', () => {
+              fetch('/api/windows/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: win.id, action: 'center' })
+              }).then(() => modal.remove());
+            });
+
+            // Action button clicks
+            item.querySelectorAll('.win-action-btn').forEach(btn => {
+              btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                const id = btn.dataset.id;
+                fetch('/api/windows/action', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id, action })
+                }).then(() => {
+                  if (action === 'close') {
+                    item.remove();
+                  } else {
+                    modal.remove();
+                  }
+                });
+              });
+            });
+
+            listContainer.appendChild(item);
+          });
+        })
+        .catch(err => {
+          listContainer.innerHTML = `<div style="color: #f38ba8; text-align: center; padding: 15px;">Failed to load windows: ${err}</div>`;
+        });
+    }
+
+    loadWindows();
+
+    // Center all windows action
+    centerAllBtn.addEventListener('click', () => {
+      fetch('/api/windows')
+        .then(r => r.json())
+        .then(data => {
+          if (data.windows) {
+            data.windows.forEach(w => {
+              fetch('/api/windows/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: w.id, action: 'center' })
+              });
+            });
+          }
+          modal.remove();
+        });
+    });
   }
 
   function initMobileHelper() {
@@ -60,7 +259,6 @@
       transition: box-shadow 0.2s, transform 0.1s;
     `;
 
-    // Restore saved position from localStorage
     try {
       const savedX = localStorage.getItem('cloudpc_toolbar_x');
       const savedY = localStorage.getItem('cloudpc_toolbar_y');
@@ -86,7 +284,27 @@
       touch-action: none;
     `;
 
-    // 1. Dynamic Mode Toggle Button (Mobile vs Desktop)
+    // 1. Task Switcher / Recent Windows Button
+    const winBtn = document.createElement('button');
+    winBtn.id = 'mobile-windows-btn';
+    winBtn.innerHTML = '🗂️ Tabs';
+    winBtn.title = 'View open apps, recent tabs & center windows';
+    winBtn.style.cssText = `
+      background: #cba6f7;
+      color: #11111b;
+      border: none;
+      padding: 7px 11px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      touch-action: manipulation;
+    `;
+
+    // 2. Dynamic Mode Toggle Button (Mobile vs Desktop)
     const modeBtn = document.createElement('button');
     modeBtn.id = 'mobile-mode-toggle';
     modeBtn.innerHTML = '📱 Fit';
@@ -106,7 +324,7 @@
       touch-action: manipulation;
     `;
 
-    // 2. Audio Toggle Button
+    // 3. Audio Toggle Button
     const audioBtn = document.createElement('button');
     audioBtn.id = 'mobile-audio-toggle';
     audioBtn.innerHTML = '🔊 Sound';
@@ -125,7 +343,7 @@
       touch-action: manipulation;
     `;
 
-    // 3. Keyboard Summon Button (Type)
+    // 4. Keyboard Summon Button (Type)
     const kbBtn = document.createElement('button');
     kbBtn.id = 'mobile-keyboard-btn';
     kbBtn.innerHTML = '⌨️ Type';
@@ -145,7 +363,7 @@
       touch-action: manipulation;
     `;
 
-    // 4. Permanent Keyboard Disable / Enable Lock Button
+    // 5. Permanent Keyboard Disable / Enable Lock Button
     const kbLockBtn = document.createElement('button');
     kbLockBtn.id = 'mobile-kblock-btn';
     kbLockBtn.title = 'Permanently disable or enable keyboard';
@@ -178,7 +396,7 @@
     `;
     updateKbLockUI();
 
-    // 5. Send Text / Paste Prompt Button
+    // 6. Send Text / Paste Prompt Button
     const pasteBtn = document.createElement('button');
     pasteBtn.innerHTML = '💬 Paste';
     pasteBtn.style.cssText = `
@@ -231,7 +449,6 @@
       let newX = barStartX + deltaX;
       let newY = barStartY + deltaY;
 
-      // Clamp within screen boundaries
       const maxX = window.innerWidth - bar.offsetWidth - 6;
       const maxY = window.innerHeight - bar.offsetHeight - 6;
       newX = Math.max(6, Math.min(newX, maxX));
@@ -259,7 +476,6 @@
       }
     }
 
-    // Touch events for mobile phones
     bar.addEventListener('touchstart', function(e) {
       if (e.touches.length === 1) {
         const touch = e.touches[0];
@@ -278,7 +494,6 @@
     window.addEventListener('touchend', onPointerUp, { passive: true });
     window.addEventListener('touchcancel', onPointerUp, { passive: true });
 
-    // Mouse events for desktop/laptop
     bar.addEventListener('mousedown', function(e) {
       if (e.target.tagName !== 'BUTTON') {
         onPointerDown(e.clientX, e.clientY);
@@ -286,14 +501,11 @@
     });
 
     window.addEventListener('mousemove', function(e) {
-      if (isDragging) {
-        onPointerMove(e.clientX, e.clientY);
-      }
+      if (isDragging) onPointerMove(e.clientX, e.clientY);
     });
 
     window.addEventListener('mouseup', onPointerUp);
 
-    // Click handler helper (ignores click if user was dragging)
     function safeClick(handler) {
       return function(e) {
         if (hasMoved) {
@@ -304,6 +516,12 @@
         handler(e);
       };
     }
+
+    // Windows / Tabs Modal Switcher
+    winBtn.addEventListener('click', safeClick(function(e) {
+      e.stopPropagation();
+      showWindowManagerModal();
+    }));
 
     // Auto-Fit / Mode Switcher
     modeBtn.addEventListener('click', safeClick(function(e) {
@@ -383,7 +601,6 @@
       }
     });
 
-    // Keyboard trigger (only if not disabled)
     kbBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       if (isKeyboardDisabled) return;
@@ -399,7 +616,6 @@
       }
     }));
 
-    // Permanent Keyboard Lock/Disable Toggle
     kbLockBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       isKeyboardDisabled = !isKeyboardDisabled;
@@ -416,7 +632,6 @@
       updateKbLockUI();
     }));
 
-    // Paste prompt
     pasteBtn.addEventListener('click', safeClick(function(e) {
       e.stopPropagation();
       const input = prompt('Enter or paste text to send to your PC:');
@@ -430,6 +645,7 @@
     }));
 
     bar.appendChild(grip);
+    bar.appendChild(winBtn);
     bar.appendChild(modeBtn);
     bar.appendChild(audioBtn);
     bar.appendChild(kbBtn);
@@ -438,7 +654,6 @@
     document.body.appendChild(bar);
     document.body.appendChild(hiddenInput);
 
-    // Auto-resizing setup
     const checkRFB = setInterval(function() {
       if (window.UI && window.UI.rfb) {
         window.rfb = window.UI.rfb;

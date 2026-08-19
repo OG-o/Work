@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Ultra-Low Latency PulseAudio Web Streamer for Mobile Devices
+Ultra-Low Latency PulseAudio Web Streamer & Mobile Window Manager API
 Streams system audio from virtual_speaker.monitor over HTTP MP3 chunked stream on port 5711.
+Provides /api/windows endpoint for mobile window management and task switching.
 """
 
+import os
 import sys
+import json
 import subprocess
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -14,7 +17,78 @@ PORT = 5711
 clients = set()
 lock = threading.Lock()
 
-class AudioStreamHandler(BaseHTTPRequestHandler):
+def get_x_env():
+    env = os.environ.copy()
+    env['DISPLAY'] = ':1'
+    env['XAUTHORITY'] = '/home/codespace/.Xauthority'
+    return env
+
+def list_open_windows():
+    try:
+        out = subprocess.check_output(['wmctrl', '-l', '-G', '-x'], env=get_x_env(), text=True, timeout=2)
+        ignored = ['xfce4-panel', 'xfdesktop', 'wrapper-2.0', 'xfce4-notifyd', 'desktop', 'keyboard']
+        windows = []
+        for line in out.strip().split('\n'):
+            if not line:
+                continue
+            parts = line.split(None, 7)
+            if len(parts) >= 8:
+                wid, desk, x, y, w, h, wclass, title = parts
+                if any(ign in wclass.lower() or ign in title.lower() for ign in ignored):
+                    continue
+                
+                # Format friendly app name
+                app_name = "Application"
+                if "chrome" in wclass.lower():
+                    app_name = "Google Chrome"
+                elif "cursor" in wclass.lower():
+                    app_name = "Cursor AI"
+                elif "code" in wclass.lower():
+                    app_name = "Visual Studio Code"
+                elif "terminal" in wclass.lower():
+                    app_name = "Ubuntu Terminal"
+                elif "thunar" in wclass.lower():
+                    app_name = "File Manager"
+                elif "bluestacks" in wclass.lower():
+                    app_name = "BlueStacks"
+                elif "geany" in wclass.lower():
+                    app_name = "Geany Editor"
+                else:
+                    app_name = wclass.split('.')[0].capitalize()
+
+                windows.append({
+                    'id': wid,
+                    'app': app_name,
+                    'title': title.replace("codespaces-375574 ", "").strip(),
+                    'class': wclass,
+                    'x': int(x),
+                    'y': int(y),
+                    'w': int(w),
+                    'h': int(h)
+                })
+        return windows
+    except Exception as e:
+        return []
+
+def handle_window_action(wid, action):
+    env = get_x_env()
+    try:
+        if action == "focus":
+            subprocess.run(['wmctrl', '-i', '-a', wid], env=env, timeout=2)
+        elif action == "maximize":
+            subprocess.run(['wmctrl', '-i', '-r', wid, '-b', 'add,maximized_vert,maximized_horz'], env=env, timeout=2)
+            subprocess.run(['wmctrl', '-i', '-a', wid], env=env, timeout=2)
+        elif action == "center":
+            subprocess.run(['wmctrl', '-i', '-r', wid, '-b', 'remove,maximized_vert,maximized_horz'], env=env, timeout=2)
+            subprocess.run(['wmctrl', '-i', '-r', wid, '-e', '0,10,40,700,500'], env=env, timeout=2)
+            subprocess.run(['wmctrl', '-i', '-a', wid], env=env, timeout=2)
+        elif action == "close":
+            subprocess.run(['wmctrl', '-i', '-c', wid], env=env, timeout=2)
+        return True
+    except Exception:
+        return False
+
+class UnifiedServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ["/", "/audio.mp3", "/stream"]:
             self.send_response(200)
@@ -61,17 +135,55 @@ class AudioStreamHandler(BaseHTTPRequestHandler):
                     proc.wait(timeout=1)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+        elif self.path.startswith("/api/windows"):
+            windows = list_open_windows()
+            data = json.dumps({"status": "ok", "count": len(windows), "windows": windows}).encode('utf-8')
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(data)
         else:
             self.send_response(404)
             self.end_headers()
 
+    def do_POST(self):
+        if self.path.startswith("/api/windows/action"):
+            content_len = int(self.headers.get('Content-Length', 0))
+            post_body = self.rfile.read(content_len)
+            try:
+                req = json.loads(post_body.decode('utf-8'))
+                wid = req.get('id')
+                action = req.get('action', 'focus')
+                success = handle_window_action(wid, action)
+                resp = json.dumps({"status": "ok" if success else "error"}).encode('utf-8')
+            except Exception as e:
+                resp = json.dumps({"status": "error", "message": str(e)}).encode('utf-8')
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(resp)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
     def log_message(self, format, *args):
-        # Suppress routine HTTP request logging
+        # Suppress routine logging
         pass
 
 def run_server():
-    server = HTTPServer(("0.0.0.0", PORT), AudioStreamHandler)
-    print(f"🔊 Live Audio Streaming Server listening on http://0.0.0.0:{PORT}/audio.mp3")
+    server = HTTPServer(("0.0.0.0", PORT), UnifiedServerHandler)
+    print(f"🔊 Live Audio & Window Manager API listening on http://0.0.0.0:{PORT}")
     server.serve_forever()
 
 if __name__ == "__main__":
