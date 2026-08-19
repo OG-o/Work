@@ -1080,6 +1080,9 @@
       if (window.UI && window.UI.rfb) {
         window.rfb = window.UI.rfb;
         window.rfb.scaleViewport = true;
+        window.rfb.qualityLevel = 8;
+        window.rfb.compressionLevel = 1;
+        window.rfb.showDotCursor = true;
         window.rfb.resizeSession = true;
 
         setTimeout(autoResizeToScreen, 1000);
