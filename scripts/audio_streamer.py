@@ -2,7 +2,7 @@
 """
 Ultra-Low Latency PulseAudio Web Streamer & Mobile Window Manager API
 Streams system audio from virtual_speaker.monitor over HTTP MP3 chunked stream on port 5711.
-Provides /api/windows endpoint for mobile window management and task switching.
+Provides /api/windows and /api/launch endpoints for mobile window management and quick app launching.
 """
 
 import os
@@ -16,6 +16,23 @@ import time
 PORT = 5711
 clients = set()
 lock = threading.Lock()
+
+APP_LAUNCH_COMMANDS = {
+    "chrome": ["/usr/local/bin/google-chrome", "https://www.google.com"],
+    "cursor": ["/usr/local/bin/cursor", "/workspaces/Work"],
+    "code": ["/usr/local/bin/code", "/workspaces/Work"],
+    "terminal": ["xfce4-terminal"],
+    "thunar": ["thunar", "/workspaces/Work"],
+    "gimp": ["gimp"],
+    "mpv": ["mpv", "--player-operation-mode=pseudo-gui"],
+    "abiword": ["abiword"],
+    "gnumeric": ["gnumeric"],
+    "synaptic": ["synaptic"],
+    "baobab": ["baobab"],
+    "calculator": ["galculator"],
+    "settings": ["xfce4-settings-manager"],
+    "bluestacks": ["/usr/local/bin/bluestacks"]
+}
 
 def get_x_env():
     env = os.environ.copy()
@@ -37,7 +54,6 @@ def list_open_windows():
                 if any(ign in wclass.lower() or ign in title.lower() for ign in ignored):
                     continue
                 
-                # Format friendly app name
                 app_name = "Application"
                 if "chrome" in wclass.lower():
                     app_name = "Google Chrome"
@@ -49,6 +65,20 @@ def list_open_windows():
                     app_name = "Ubuntu Terminal"
                 elif "thunar" in wclass.lower():
                     app_name = "File Manager"
+                elif "gimp" in wclass.lower():
+                    app_name = "GIMP Studio"
+                elif "mpv" in wclass.lower():
+                    app_name = "MPV Media Player"
+                elif "abiword" in wclass.lower():
+                    app_name = "Word Editor (AbiWord)"
+                elif "gnumeric" in wclass.lower():
+                    app_name = "Excel Calc (Gnumeric)"
+                elif "synaptic" in wclass.lower():
+                    app_name = "Software Store"
+                elif "baobab" in wclass.lower():
+                    app_name = "Disk Usage"
+                elif "galculator" in wclass.lower():
+                    app_name = "Calculator"
                 elif "bluestacks" in wclass.lower():
                     app_name = "BlueStacks"
                 elif "geany" in wclass.lower():
@@ -88,6 +118,16 @@ def handle_window_action(wid, action):
     except Exception:
         return False
 
+def launch_app(app_key):
+    cmd = APP_LAUNCH_COMMANDS.get(app_key)
+    if not cmd:
+        return False
+    try:
+        subprocess.Popen(cmd, env=get_x_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
 class UnifiedServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ["/", "/audio.mp3", "/stream"]:
@@ -100,7 +140,6 @@ class UnifiedServerHandler(BaseHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
 
-            # Start ffmpeg capture for this client
             cmd = [
                 "ffmpeg",
                 "-nostats",
@@ -166,6 +205,22 @@ class UnifiedServerHandler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(resp)
+        elif self.path.startswith("/api/launch"):
+            content_len = int(self.headers.get('Content-Length', 0))
+            post_body = self.rfile.read(content_len)
+            try:
+                req = json.loads(post_body.decode('utf-8'))
+                app_key = req.get('app', '')
+                success = launch_app(app_key)
+                resp = json.dumps({"status": "ok" if success else "error", "app": app_key}).encode('utf-8')
+            except Exception as e:
+                resp = json.dumps({"status": "error", "message": str(e)}).encode('utf-8')
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(resp)
         else:
             self.send_response(404)
             self.end_headers()
@@ -178,12 +233,11 @@ class UnifiedServerHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, format, *args):
-        # Suppress routine logging
         pass
 
 def run_server():
     server = HTTPServer(("0.0.0.0", PORT), UnifiedServerHandler)
-    print(f"🔊 Live Audio & Window Manager API listening on http://0.0.0.0:{PORT}")
+    print(f"🔊 Live Audio, Window Manager & App Launch API listening on http://0.0.0.0:{PORT}")
     server.serve_forever()
 
 if __name__ == "__main__":

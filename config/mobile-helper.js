@@ -1,4 +1,4 @@
-// Mobile Helper for noVNC - Draggable Floating Toolbar, Mobile Task Switcher / Window Manager, Keyboard & Audio
+// Mobile Helper for noVNC - Draggable Floating Toolbar, App Launcher, Task Switcher, Keyboard & Audio
 (function() {
   let audioElement = null;
   let isAudioPlaying = false;
@@ -28,6 +28,128 @@
     } catch (e) {
       console.warn("Dynamic resize request failed:", e);
     }
+  }
+
+  // ==========================================
+  // 🚀 MOBILE QUICK APP LAUNCHER DRAWER
+  // ==========================================
+  function showAppDrawerModal() {
+    let modal = document.getElementById('cloudpc-app-drawer-modal');
+    if (modal) {
+      modal.remove();
+      return;
+    }
+
+    modal = document.createElement('div');
+    modal.id = 'cloudpc-app-drawer-modal';
+    modal.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      max-width: 480px;
+      max-height: 80vh;
+      background: rgba(24, 24, 37, 0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+      z-index: 1000002;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #cdd6f4;
+      animation: slideUp 0.2s ease-out;
+    `;
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    header.innerHTML = `
+      <div style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+        <span>🚀 1-Tap App Launcher</span>
+      </div>
+      <button id="close-app-drawer-btn" style="background: none; border: none; color: #a6adc8; font-size: 20px; cursor: pointer; padding: 4px;">✕</button>
+    `;
+    modal.appendChild(header);
+
+    const apps = [
+      { key: 'chrome', name: 'Google Chrome', icon: '🌐', desc: 'Fast Web Browser' },
+      { key: 'cursor', name: 'Cursor AI', icon: '🤖', desc: 'AI Code Editor' },
+      { key: 'code', name: 'VS Code', icon: '📝', desc: 'Desktop Code Studio' },
+      { key: 'terminal', name: 'Terminal', icon: '📟', desc: 'Ubuntu Root Shell' },
+      { key: 'thunar', name: 'Files', icon: '📂', desc: 'File Manager & Archives' },
+      { key: 'gimp', name: 'GIMP Studio', icon: '🎨', desc: 'Image & Photo Editor' },
+      { key: 'mpv', name: 'MPV Player', icon: '🎬', desc: 'Video & Music Player' },
+      { key: 'abiword', name: 'Word Docs', icon: '📄', desc: 'Document Editor' },
+      { key: 'gnumeric', name: 'Excel Sheets', icon: '📊', desc: 'Spreadsheet Calc' },
+      { key: 'synaptic', name: 'App Store', icon: '📦', desc: 'Software Manager' },
+      { key: 'calculator', name: 'Calculator', icon: '🧮', desc: 'Scientific Calc' },
+      { key: 'baobab', name: 'Disk Usage', icon: '💾', desc: 'Storage Analyzer' },
+      { key: 'settings', name: 'Settings', icon: '⚙️', desc: 'Control Center' },
+      { key: 'bluestacks', name: 'BlueStacks', icon: '🎮', desc: 'Android Player' }
+    ];
+
+    const grid = document.createElement('div');
+    grid.style.cssText = `
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      overflow-y: auto;
+      max-height: 55vh;
+      padding: 4px 0;
+    `;
+
+    apps.forEach(app => {
+      const card = document.createElement('div');
+      card.style.cssText = `
+        background: rgba(49, 50, 68, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: transform 0.1s, background 0.15s;
+        touch-action: manipulation;
+      `;
+
+      card.innerHTML = `
+        <div style="font-size: 26px;">${app.icon}</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 13px; font-weight: 700; color: #cdd6f4;">${app.name}</div>
+          <div style="font-size: 11px; color: #a6adc8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${app.desc}</div>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        card.style.background = '#89b4fa';
+        fetch('/api/launch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ app: app.key })
+        }).then(() => {
+          setTimeout(() => modal.remove(), 250);
+        });
+      });
+
+      grid.appendChild(card);
+    });
+
+    modal.appendChild(grid);
+    document.body.appendChild(modal);
+
+    modal.querySelector('#close-app-drawer-btn').addEventListener('click', () => modal.remove());
   }
 
   // ==========================================
@@ -122,14 +244,13 @@
 
     modal.querySelector('#close-modal-btn').addEventListener('click', () => modal.remove());
 
-    // Fetch and render windows list
     function loadWindows() {
       fetch('/api/windows')
         .then(r => r.json())
         .then(data => {
           listContainer.innerHTML = '';
           if (!data.windows || data.windows.length === 0) {
-            listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #a6adc8;">No application windows open.<br><small style="color: #6c7086;">Open an app like Chrome, Cursor, or Terminal.</small></div>';
+            listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #a6adc8;">No application windows open.<br><small style="color: #6c7086;">Tap 🚀 Apps to launch Chrome, Cursor, or Terminal.</small></div>';
             return;
           }
 
@@ -154,6 +275,11 @@
             else if (win.app.includes('Code')) icon = '📝';
             else if (win.app.includes('Terminal')) icon = '📟';
             else if (win.app.includes('File')) icon = '📂';
+            else if (win.app.includes('GIMP')) icon = '🎨';
+            else if (win.app.includes('MPV')) icon = '🎬';
+            else if (win.app.includes('Word')) icon = '📄';
+            else if (win.app.includes('Excel')) icon = '📊';
+            else if (win.app.includes('Calculator')) icon = '🧮';
             else if (win.app.includes('BlueStacks')) icon = '🎮';
 
             item.innerHTML = `
@@ -172,7 +298,6 @@
               </div>
             `;
 
-            // Tap item to bring to front and center
             item.addEventListener('click', () => {
               fetch('/api/windows/action', {
                 method: 'POST',
@@ -181,7 +306,6 @@
               }).then(() => modal.remove());
             });
 
-            // Action button clicks
             item.querySelectorAll('.win-action-btn').forEach(btn => {
               btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -211,7 +335,6 @@
 
     loadWindows();
 
-    // Center all windows action
     centerAllBtn.addEventListener('click', () => {
       fetch('/api/windows')
         .then(r => r.json())
@@ -233,7 +356,6 @@
   function initMobileHelper() {
     if (document.getElementById('mobile-quick-toolbar')) return;
 
-    // Create draggable floating toolbar container
     const bar = document.createElement('div');
     bar.id = 'mobile-quick-toolbar';
     bar.style.cssText = `
@@ -243,11 +365,11 @@
       z-index: 999999;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       background: rgba(24, 24, 37, 0.92);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
-      padding: 6px 10px;
+      padding: 6px 8px;
       border-radius: 30px;
       border: 1px solid rgba(255, 255, 255, 0.20);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -284,27 +406,47 @@
       touch-action: none;
     `;
 
-    // 1. Task Switcher / Recent Windows Button
-    const winBtn = document.createElement('button');
-    winBtn.id = 'mobile-windows-btn';
-    winBtn.innerHTML = '🗂️ Tabs';
-    winBtn.title = 'View open apps, recent tabs & center windows';
-    winBtn.style.cssText = `
-      background: #cba6f7;
+    // 1. 1-Tap App Launcher Button
+    const appsBtn = document.createElement('button');
+    appsBtn.id = 'mobile-apps-btn';
+    appsBtn.innerHTML = '🚀 Apps';
+    appsBtn.title = '1-Tap App Launcher';
+    appsBtn.style.cssText = `
+      background: #fab387;
       color: #11111b;
       border: none;
-      padding: 7px 11px;
+      padding: 7px 10px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 2px;
       touch-action: manipulation;
     `;
 
-    // 2. Dynamic Mode Toggle Button (Mobile vs Desktop)
+    // 2. Task Switcher / Recent Windows Button
+    const winBtn = document.createElement('button');
+    winBtn.id = 'mobile-windows-btn';
+    winBtn.innerHTML = '🗂️ Tabs';
+    winBtn.title = 'View open apps & recent tabs';
+    winBtn.style.cssText = `
+      background: #cba6f7;
+      color: #11111b;
+      border: none;
+      padding: 7px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      touch-action: manipulation;
+    `;
+
+    // 3. Dynamic Mode Toggle Button (Mobile vs Desktop)
     const modeBtn = document.createElement('button');
     modeBtn.id = 'mobile-mode-toggle';
     modeBtn.innerHTML = '📱 Fit';
@@ -313,18 +455,18 @@
       background: #89b4fa;
       color: #11111b;
       border: none;
-      padding: 7px 11px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 2px;
       touch-action: manipulation;
     `;
 
-    // 3. Audio Toggle Button
+    // 4. Audio Toggle Button
     const audioBtn = document.createElement('button');
     audioBtn.id = 'mobile-audio-toggle';
     audioBtn.innerHTML = '🔊 Sound';
@@ -332,18 +474,18 @@
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 7px 11px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 2px;
       touch-action: manipulation;
     `;
 
-    // 4. Keyboard Summon Button (Type)
+    // 5. Keyboard Summon Button (Type)
     const kbBtn = document.createElement('button');
     kbBtn.id = 'mobile-keyboard-btn';
     kbBtn.innerHTML = '⌨️ Type';
@@ -352,18 +494,18 @@
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 7px 11px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 3px;
+      gap: 2px;
       touch-action: manipulation;
     `;
 
-    // 5. Permanent Keyboard Disable / Enable Lock Button
+    // 6. Permanent Keyboard Disable / Enable Lock Button
     const kbLockBtn = document.createElement('button');
     kbLockBtn.id = 'mobile-kblock-btn';
     kbLockBtn.title = 'Permanently disable or enable keyboard';
@@ -387,7 +529,7 @@
     }
     
     kbLockBtn.style.cssText = `
-      padding: 7px 10px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 800;
@@ -396,14 +538,14 @@
     `;
     updateKbLockUI();
 
-    // 6. Send Text / Paste Prompt Button
+    // 7. Send Text / Paste Prompt Button
     const pasteBtn = document.createElement('button');
     pasteBtn.innerHTML = '💬 Paste';
     pasteBtn.style.cssText = `
       background: #313244;
       color: #cdd6f4;
       border: 1px solid #45475a;
-      padding: 7px 10px;
+      padding: 7px 9px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
@@ -516,6 +658,12 @@
         handler(e);
       };
     }
+
+    // App Drawer Button
+    appsBtn.addEventListener('click', safeClick(function(e) {
+      e.stopPropagation();
+      showAppDrawerModal();
+    }));
 
     // Windows / Tabs Modal Switcher
     winBtn.addEventListener('click', safeClick(function(e) {
@@ -645,6 +793,7 @@
     }));
 
     bar.appendChild(grip);
+    bar.appendChild(appsBtn);
     bar.appendChild(winBtn);
     bar.appendChild(modeBtn);
     bar.appendChild(audioBtn);

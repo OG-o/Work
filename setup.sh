@@ -53,6 +53,18 @@ sudo apt-get install -y --no-install-recommends \
     xdotool \
     wmctrl \
     matchbox-keyboard \
+    wine \
+    winetricks \
+    cabextract \
+    mpv \
+    gimp \
+    abiword \
+    gnumeric \
+    synaptic \
+    gdebi-core \
+    baobab \
+    tmux \
+    neovim \
     curl \
     wget \
     git \
