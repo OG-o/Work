@@ -1,25 +1,19 @@
-# Logs
-*.log
-logs/
-.vnc/*.log
-/tmp/*.log
-
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
+*.so
+.Python
 
-# OS and Editor artifacts
-.DS_Store
-Thumbs.db
+# Logs & Runtime files
+*.log
+.kasmpasswd
+*.pid
 *.swp
-*~
-.idea/
-.vscode/
+*.bak
+.DS_Store
 
-# System generated artifacts
-.system_generated/
-*.deb
-*.iso
-*.img
+# Temporary build dirs
+tmp/
+dist/
+build/
