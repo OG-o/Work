@@ -96,7 +96,7 @@ def main():
     print_banner()
     results = []
 
-    results.append(check_port("127.0.0.1", 5901, "TigerVNC Server"))
+    results.append(check_port("127.0.0.1", 8443, "TigerVNC Server"))
     results.append(check_port("127.0.0.1", 6081, "Websockify VNC Bridge"))
     results.append(check_port("127.0.0.1", 5711, "Audio Streamer"))
     results.append(check_port("127.0.0.1", 6080, "Nginx Unified Gateway"))

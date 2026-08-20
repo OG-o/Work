@@ -47,7 +47,8 @@ stop_services() {
     pkill -f "cloudflared" 2>/dev/null || true
     pkill -f "websockify" 2>/dev/null || true
     pkill -f "audio_streamer" 2>/dev/null || true
-    tigervncserver -kill :1 2>/dev/null || true
+    vncserver -kill :1 2>/dev/null || true
+    pkill -f "Xvnc" 2>/dev/null || true
     pkill -f "Xtigervnc" 2>/dev/null || true
     rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
     sudo nginx -s stop 2>/dev/null || true
@@ -56,7 +57,10 @@ stop_services() {
 
 get_tunnel_url() {
     local url=""
-    if [ -f "/home/codespace/.vnc/cloudflared.log" ]; then
+    if [ -f "/home/codespace/.vnc/tunnel.log" ]; then
+        url=$(grep -o 'https://[-a-z0-9]*\.trycloudflare\.com' /home/codespace/.vnc/tunnel.log | tail -n 1)
+    fi
+    if [ -z "$url" ] && [ -f "/home/codespace/.vnc/cloudflared.log" ]; then
         url=$(grep -o 'https://[-a-z0-9]*\.trycloudflare\.com' /home/codespace/.vnc/cloudflared.log | tail -n 1)
     fi
     echo "$url"
@@ -67,10 +71,10 @@ show_status() {
     echo -e "${BOLD}Component Status:${NC}"
 
     # Check VNC
-    if pgrep -f "Xtigervnc :1" > /dev/null; then
-        echo -e "  [${GREEN}RUNNING${NC}] TigerVNC X11 Server (Port 5901)"
+    if pgrep -f "Xvnc :1" > /dev/null || pgrep -f "Xtigervnc :1" > /dev/null; then
+        echo -e "  [${GREEN}RUNNING${NC}] VNC Desktop Display Server (:1)"
     else
-        echo -e "  [${RED}STOPPED${NC}] TigerVNC X11 Server"
+        echo -e "  [${RED}STOPPED${NC}] VNC Desktop Server"
     fi
 
     # Check Audio
@@ -80,13 +84,6 @@ show_status() {
         echo -e "  [${RED}STOPPED${NC}] PulseAudio Live Streamer"
     fi
 
-    # Check Websockify
-    if pgrep -f "websockify 6081" > /dev/null; then
-        echo -e "  [${GREEN}RUNNING${NC}] Websockify VNC Proxy (Port 6081)"
-    else
-        echo -e "  [${RED}STOPPED${NC}] Websockify VNC Proxy"
-    fi
-
     # Check Nginx
     if pgrep -f "nginx: master" > /dev/null; then
         echo -e "  [${GREEN}RUNNING${NC}] Nginx Unified Gateway (Port 6080)"
@@ -94,12 +91,19 @@ show_status() {
         echo -e "  [${RED}STOPPED${NC}] Nginx Unified Gateway"
     fi
 
+    # Check XRDP
+    if pgrep -f "/usr/sbin/xrdp" > /dev/null; then
+        echo -e "  [${GREEN}RUNNING${NC}] Microsoft Remote Desktop (XRDP - Port 3389)"
+    else
+        echo -e "  [${YELLOW}STOPPED${NC}] Microsoft Remote Desktop (XRDP)"
+    fi
+
     # Check Tunnel
     local tunnel_url=$(get_tunnel_url)
     if [ -n "$tunnel_url" ]; then
-        echo -e "  [${GREEN}RUNNING${NC}] Cloudflare Public Tunnel"
+        echo -e "  [${GREEN}RUNNING${NC}] Cloudflare Public Edge Gateway"
         echo ""
-        echo -e "${CYAN}${BOLD}🌐 Live Access URL (Open in Browser):${NC}"
+        echo -e "${CYAN}${BOLD}🌐 Live Access URL (Open in Browser / PWA):${NC}"
         echo -e "👉 ${GREEN}${BOLD}${tunnel_url}${NC}"
     else
         echo -e "  [${YELLOW}WAITING${NC}] Cloudflare Tunnel initializing..."
@@ -116,12 +120,20 @@ show_url() {
     fi
 }
 
+start_rdp() {
+    /workspaces/Work/scripts/pinggy_rdp_tunnel.sh
+}
+
+run_health() {
+    python3 /workspaces/Work/scripts/system_health_check.py
+}
+
 show_logs() {
     echo -e "${CYAN}${BOLD}--- Recent Watchdog Logs ---${NC}"
-    tail -n 25 /home/codespace/.vnc/watchdog.log 2>/dev/null || echo "No watchdog logs found."
+    tail -n 25 /home/codespace/.vnc/daily-service.log 2>/dev/null || echo "No watchdog logs found."
     echo ""
     echo -e "${CYAN}${BOLD}--- Recent Cloudflare Tunnel Logs ---${NC}"
-    tail -n 15 /home/codespace/.vnc/cloudflared.log 2>/dev/null || echo "No tunnel logs found."
+    tail -n 15 /home/codespace/.vnc/tunnel.log 2>/dev/null || echo "No tunnel logs found."
 }
 
 case "$1" in
@@ -142,19 +154,27 @@ case "$1" in
     url)
         show_url
         ;;
+    rdp)
+        start_rdp
+        ;;
+    health)
+        run_health
+        ;;
     logs)
         show_logs
         ;;
     *)
         print_header
-        echo -e "${BOLD}Usage:${NC} cloudpc {start|stop|restart|status|url|logs}"
+        echo -e "${BOLD}Usage:${NC} cloudpc {start|stop|restart|status|url|rdp|health|logs}"
         echo ""
         echo "Commands:"
         echo "  start    - Launch all Cloud PC services & 24/7 watchdog"
         echo "  stop     - Stop all desktop, audio, and network services"
         echo "  restart  - Restart the entire Cloud PC stack"
-        echo "  status   - Check status of VNC, Audio, Nginx, and Tunnel"
+        echo "  status   - Check status of VNC, Audio, Nginx, XRDP, and Tunnel"
         echo "  url      - Print the active public web access link"
+        echo "  rdp      - Generate live Microsoft Remote Desktop (MSTSC) tunnel"
+        echo "  health   - Run comprehensive diagnostic test suite"
         echo "  logs     - Show real-time system and tunnel logs"
         echo ""
         exit 1
